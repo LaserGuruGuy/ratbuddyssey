@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -169,6 +170,9 @@ namespace Ratbuddyssey
                     Collection<DataPoint> points = new Collection<DataPoint>();
 
                     string s = keys[i].ToString();
+                    if (!selectedChannel.ResponseData.ContainsKey(s))
+                        continue;
+
                     string[] values = selectedChannel.ResponseData[s];
                     int count = values.Length;
                     Complex[] cValues = new Complex[count];
@@ -296,7 +300,12 @@ namespace Ratbuddyssey
         {
             CheckBox checkBox = sender as CheckBox;
             int val = int.Parse(checkBox.Content.ToString()) - 1;
-            if (!keys.Contains(val))
+            if (selectedChannel != null && !selectedChannel.ResponseData.ContainsKey(val.ToString()))
+            {
+                // This channel has not been measured in this Audyssey calibration. Don't attempt to plot it, and clear the checkbox.
+                checkBox.IsChecked = false;
+            }
+            else if (!keys.Contains(val))
             {
                 keys.Add(val);
                 colors.Add(val, checkBox.Foreground);
@@ -329,13 +338,39 @@ namespace Ratbuddyssey
         }
         private void ChannelsView_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (((DetectedChannel)channelsView.SelectedValue != null) && (((DetectedChannel)channelsView.SelectedValue).ResponseData != null))
+            List<CheckBox> checkBoxes = new List<CheckBox> {
+                chbx1, chbx2, chbx3, chbx4, chbx5, chbx6, chbx7, chbx8
+            };
+
+            // Disable all the check boxes
+            foreach (var checkBox in checkBoxes)
             {
-                if (((DetectedChannel)channelsView.SelectedValue).ResponseData.Count > 0)
+                checkBox.IsEnabled = false;
+            }
+
+            var selectedValue = channelsView.SelectedValue as DetectedChannel;
+            if (selectedValue != null && selectedValue.ResponseData != null)
+            {
+                // Enable the check boxes corresponding to those positions for which the measurement is available
+                foreach (var measurementPosition in selectedValue.ResponseData)
+                {
+                    int positionIndex = int.Parse(measurementPosition.Key);
+                    Debug.Assert(positionIndex >= 0 && positionIndex < checkBoxes.Count);
+                    checkBoxes[positionIndex].IsEnabled = true;
+                }
+
+                if (selectedValue.ResponseData.Count > 0)
                 {
                     selectedChannel = (DetectedChannel)channelsView.SelectedValue;
                     DrawChart();
                 }
+            }
+
+            // Un-check all the disabled check boxes
+            foreach (var checkBox in checkBoxes)
+            {
+                if (!checkBox.IsEnabled && checkBox.IsChecked == true)
+                    checkBox.IsChecked = false;
             }
         }
         private void ChannelsView_OnClickSticky(object sender, RoutedEventArgs e)
